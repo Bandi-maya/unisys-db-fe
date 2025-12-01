@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 // Assuming useParams is available in the parent or if needed here, 
 // but we'll assume the path components are passed via documentData for simplicity.
 
@@ -25,7 +25,8 @@ export default function DocumentView({
   docId,
   collectionName,
   onAddField,
-  onSelectCollection,
+  setCollection,
+  path,
   onAddSubCollection
 }: any) {
 
@@ -46,19 +47,19 @@ export default function DocumentView({
     // NOTE: You must ensure the parent component provides these path details in documentData!
     const dbName = pathname.split('/')[2]; // Assumes path structure: /database/{dbName}/{collectionName}/{docId}
 
-    console.log(dbName, collectionName, docId)
-    if (!dbName || !collectionName || !docId) {
-      setLoading(false);
-      setError("Missing database or collection context in document data.");
-      return;
-    }
+    // console.log(dbName, collectionName, docId)
+    // if (!dbName || !collectionName || !docId) {
+    //   setLoading(false);
+    //   setError("Missing database or collection context in document data.");
+    //   return;
+    // }
 
     const fetchDocument = async () => {
       setLoading(true);
       setError(null);
 
       // API URL: http://localhost:8000/api/v1/documents/{dbname}/{collectionName}/{docId}
-      const url = `${API_BASE_URL}${API_DOCS_PATH}${dbName}/${collectionName}/${docId}`;
+      const url = `${API_BASE_URL}${API_DOCS_PATH}${dbName}/${path}`;
 
       try {
         const response = await fetch(url);
@@ -83,7 +84,7 @@ export default function DocumentView({
     };
 
     fetchDocument();
-  }, [docId]); // Re-fetch whenever the selected document path changes
+  }, [path]);
 
 
   const handleAddFieldClick = () => {
@@ -177,6 +178,9 @@ export default function DocumentView({
         subCollections.map(col => (
           <div
             key={col}
+            onClick={() => {
+              setCollection(col)
+            }}
             className="p-2 border rounded mb-2 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer transition-colors"
           // Handle navigation to the subcollection view
           >

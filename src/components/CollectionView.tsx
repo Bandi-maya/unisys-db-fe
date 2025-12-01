@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../constants';
 
 // --- API ENDPOINT CONFIGURATION ---
@@ -41,7 +41,9 @@ const SchemaFormField = ({ field, formData, onChange }: any) => {
 
 export default function CollectionView({
   collectionData,
-  onSelectDocument
+  onSelectDocument,
+  isDocument,
+  path
 }: any) {
   const { dbName } = useParams();
 
@@ -68,9 +70,12 @@ export default function CollectionView({
 
   // --- 1. Fetch Documents ---
   const fetchDocuments = async () => {
+    let url = `${API_BASE_URL}${API_DOCS_PATH}${dbName}/${path}`;
+    if (isDocument) {
+      url = url.split('/').slice(0, -1).join('/')
+    }
     setLoading(true);
     setError(null);
-    const url = `${API_BASE_URL}${API_DOCS_PATH}${dbName}/${collectionName}`;
 
     try {
       const response = await fetch(url);
@@ -81,31 +86,20 @@ export default function CollectionView({
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
-    if (!dbName || !collectionName) return;
-    setMetadataCollectionName(collectionName)
-
     fetchDocuments();
-  }, [dbName, collectionName]);
+  }, [path, isDocument]);
 
 
   // --- 2. Fetch Metadata Schema ---
   useEffect(() => {
-    if (!dbName || !collectionName) return;
-
-    // Skip fetching metadata if the collection is for metadata itself (to prevent recursion/errors)
-    if (collectionName === 'metadata_schemas') {
-      setLoadingMetadata(false);
-      return;
-    }
-
     const fetchMetadata = async () => {
       setLoadingMetadata(true);
       setMetadataError(null);
       // API URL: /metadata/{db_name}/{table_name}
-      const url = `${API_BASE_URL}${API_METADATA_PATH}${dbName}/${collectionName}`;
+      const url = `${API_BASE_URL}${API_METADATA_PATH}${dbName}/${path}`;
 
       try {
         const response = await fetch(url);
@@ -127,7 +121,7 @@ export default function CollectionView({
     };
 
     fetchMetadata();
-  }, [dbName, collectionName]);
+  }, [path, isDocument]);
 
   console.log(metadata, metadata_collection_name)
 
@@ -192,7 +186,6 @@ export default function CollectionView({
     }
   };
 
-
   return (
     <div className="p-4 dark:bg-gray-800">
       <h2 className="text-2xl font-bold mb-4 border-b pb-2">
@@ -223,7 +216,9 @@ export default function CollectionView({
               <div
                 key={doc._id}
                 className="p-3 border rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600 dark:bg-gray-800 transition-colors"
-                onClick={() => onSelectDocument(doc, collectionData)}
+                onClick={() => {
+                  onSelectDocument(doc, collectionData)
+                }}
               >
                 <b>{doc._id}</b>
               </div>
