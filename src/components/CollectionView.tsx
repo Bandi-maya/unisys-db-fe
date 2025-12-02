@@ -96,10 +96,13 @@ export default function CollectionView({
   // --- 2. Fetch Metadata Schema ---
   useEffect(() => {
     const fetchMetadata = async () => {
+      let url = `${API_BASE_URL}${API_METADATA_PATH}${dbName}/${path.split('/').map((key: any, index: any) => index % 2 === 1 ? ':_doc_id' : key).join('$')}`;
+      if (isDocument) {
+        url = url.split('$').slice(0, -1).join('$')
+      }
       setLoadingMetadata(true);
       setMetadataError(null);
       // API URL: /metadata/{db_name}/{table_name}
-      const url = `${API_BASE_URL}${API_METADATA_PATH}${dbName}/${path}`;
 
       try {
         const response = await fetch(url);
