@@ -1,171 +1,269 @@
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../constants";
 
-export default function Metadata() {
-    const [fields, setFields] = useState<any>({});
-    const [selectedField, setSelectedField] = useState<any>(null);
+function FieldEditorTabs({ field, fieldData, updateField }: any) {
+    const tabs = ["Basic", "Validation",
+        // "UI",
+        "Security", "Advanced"];
+    const [active, setActive] = useState("Basic");
 
-    const tabs = ["Basic", "Validation", "UI", "Database", "Security", "Advanced"];
-    const [activeTab, setActiveTab] = useState("Basic");
+    return (
+        <>
+            <div className="border-b mb-4 flex gap-3">
+                {tabs.map((t) => (
+                    <button
+                        key={t}
+                        onClick={() => setActive(t)}
+                        className={active === t ? "font-bold border-b-2" : ""}
+                    >
+                        {t}
+                    </button>
+                ))}
+            </div>
 
-    // Fetch metadata
-    useEffect(() => {
-        const db = window.location.pathname.split("/")[3];
-        const path = window.location.pathname.split("/").slice(4).join("/");
-        const url = `${API_BASE_URL}/metadata/${db}/${path}`;
+            {active === "Basic" && (
+                <BasicTab field={field} fieldData={fieldData} updateField={updateField} />
+            )}
+            {active === "Validation" && (
+                <ValidationTab field={field} fieldData={fieldData} updateField={updateField} />
+            )}
+            {/* {active === "UI" && (
+                <UITab field={field} fieldData={fieldData} updateField={updateField} />
+            )} */}
+            {active === "Security" && (
+                <SecurityTab field={field} fieldData={fieldData} updateField={updateField} />
+            )}
+            {active === "Advanced" && (
+                <AdvancedTab field={field} fieldData={fieldData} updateField={updateField} />
+            )}
+        </>
+    );
+}
 
-        const load = async () => {
-            const res = await fetch(url);
-            const json = await res.json();
-            const tableName = Object.keys(json.data)[0];
-            const fieldDefs = json.data[tableName];
+function TableSettingsTab({ tableSettings, updateTable }: any) {
+    return (
+        <div className="space-y-4">
 
-            setFields(fieldDefs);
-            setSelectedField(Object.keys(fieldDefs)[0]);
-        };
+            <div>
+                <label className="font-medium block">Primary Key</label>
+                <input
+                    className="border p-2 w-full rounded"
+                    value={tableSettings.primary_key}
+                    onChange={(e) => updateTable("primary_key", e.target.value)}
+                />
+            </div>
 
-        load();
-    }, []);
+            <div>
+                <label className="font-medium block">Audit (created_at, updated_at)</label>
+                <input
+                    type="checkbox"
+                    checked={tableSettings.audit || false}
+                    onChange={(e) => updateTable("audit", e.target.checked)}
+                />
+            </div>
 
-    const updateField = (field: any, key: any, value: any) => {
-        setFields((prev: any) => ({
-            ...prev,
-            [field]: { ...prev[field], [key]: value }
-        }));
-    };
+            <div>
+                <label className="font-medium block">Soft Delete (deleted_at)</label>
+                <input
+                    type="checkbox"
+                    checked={tableSettings.soft_delete || false}
+                    onChange={(e) => updateTable("soft_delete", e.target.checked)}
+                />
+            </div>
+
+            <div>
+                <label className="font-medium block">Indexes (comma separated)</label>
+                <input
+                    className="border p-2 w-full rounded"
+                    value={tableSettings.indexes?.join(",") || ""}
+                    onChange={(e) => updateTable("indexes", e.target.value.split(","))}
+                />
+            </div>
+
+            <div>
+                <label className="font-medium block">Foreign Keys (JSON)</label>
+                <textarea
+                    className="border p-2 w-full rounded"
+                    value={JSON.stringify(tableSettings.foreign_keys || [], null, 2)}
+                    onChange={(e) =>
+                        updateTable("foreign_keys", JSON.parse(e.target.value || "[]"))
+                    }
+                />
+            </div>
+        </div>
+    );
+}
+
+function FieldsPanel({ fields, selectedField, setSelectedField, setFields }: any) {
 
     const addField = () => {
-        const newName = "new_field_" + (Object.keys(fields).length + 1);
-        const template = {
-            column_name: newName,
-            data_type: "string",
-            required: false,
-            disabled: false,
-            is_unique: false,
-            storage_type: "",
-            allowed_values: []
-        };
-
-        setFields((prev: any) => ({ ...prev, [newName]: template }));
+        const newName = "field_" + (Object.keys(fields).length + 1);
+        setFields((prev: any) => ({
+            ...prev,
+            [newName]: {
+                column_name: newName,
+                data_type: "string",
+                required: false
+            }
+        }));
         setSelectedField(newName);
     };
 
-    const deleteField = (field: any) => {
-        const updated: any = { ...fields };
-        delete updated[field];
+    const deleteField = (f: string) => {
+        const updated = { ...fields };
+        delete updated[f];
         setFields(updated);
-
-        const next = Object.keys(updated)[0] || null;
-        setSelectedField(next);
+        setSelectedField(Object.keys(updated)[0] || null);
     };
 
-    const save = () => {
-        const tableName = "table";
+    return (
+        <aside className="w-64 border-r bg-gray-50 p-4 overflow-y-auto">
+            <div className="flex justify-between mb-4">
+                <h2 className="text-lg font-semibold">Fields</h2>
+                <button className="bg-blue-500 text-white px-2 py-1 rounded" onClick={addField}>
+                    + Add
+                </button>
+            </div>
+
+            <ul className="space-y-1">
+                {Object.keys(fields).map((f) => (
+                    <li key={f}>
+                        <button
+                            onClick={() => setSelectedField(f)}
+                            className={`w-full text-left px-3 py-2 rounded ${f === selectedField ? "bg-blue-100 font-bold" : "hover:bg-gray-200"
+                                }`}
+                        >
+                            {fields[f].column_name}
+                        </button>
+                        {selectedField === f && (
+                            <button
+                                className="text-red-500 text-sm ml-2"
+                                onClick={() => deleteField(f)}
+                            >
+                                Delete
+                            </button>
+                        )}
+                    </li>
+                ))}
+            </ul>
+        </aside>
+    );
+}
+
+export default function Metadata() {
+    const [fields, setFields] = useState<any>({});
+    const [tableSettings, setTableSettings] = useState<any>({
+        primary_key: "",
+        foreign_keys: [],
+        indexes: [],
+        audit: false,
+        soft_delete: false,
+    });
+
+    const [selectedField, setSelectedField] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState("Fields");
+
+    const db = window.location.pathname.split("/")[3];
+    const path = window.location.pathname.split("/").slice(4).join("/");
+    const validKey = path.split('/').map((key, i) => i % 2 ? ":_doc_id" : key).join("$");
+
+    const url = `${API_BASE_URL}/metadata/${db}/${validKey}`;
+
+    // LOAD METADATA
+    useEffect(() => {
+        const load = async () => {
+            const res = await fetch(url);
+            const json = await res.json();
+
+            const def = json.data[validKey];
+            if (!def) return;
+
+            setFields(def.fields || {});
+            setSelectedField(Object.keys(def.fields || {})[0] ?? null);
+
+            setTableSettings(def.table || {});
+        };
+        load();
+    }, []);
+
+    // Update field
+    const updateField = (field: string, key: string, value: any) => {
+        setFields((prev: any) => {
+            const updated = structuredClone(prev);
+
+            // renaming the field name
+            if (key === "column_name") {
+                updated[value] = { ...updated[field], column_name: value };
+                delete updated[field];
+                setSelectedField(value);
+                return updated;
+            }
+
+            updated[field] = { ...updated[field], [key]: value };
+            return updated;
+        });
+    };
+
+    // Update table settings
+    const updateTable = (key: string, value: any) => {
+        setTableSettings((prev: any) => ({ ...prev, [key]: value }));
+    };
+
+    const save = async () => {
         const payload = {
-            data: {
-                [tableName]: fields
+            [validKey]: {
+                table: tableSettings,
+                fields: fields
             }
         };
 
-        console.log("SAVE PAYLOAD:", payload);
-        alert("Saved — check console!");
+        await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        alert("Saved!");
     };
-
-    if (!selectedField) return <div className="p-10">Loading…</div>;
-
-    const fieldData: any = fields[selectedField];
 
     return (
         <div className="flex h-[90vh]">
-            {/* SIDEBAR */}
-            <aside className="w-64 border-r bg-gray-50 p-4 overflow-y-auto">
-                <div className="flex justify-between mb-4">
-                    <h2 className="text-lg font-semibold">Fields</h2>
-                    <button
-                        className="bg-blue-500 text-white px-2 py-1 rounded"
-                        onClick={addField}
-                    >
-                        + Add
-                    </button>
-                </div>
+            <FieldsPanel
+                fields={fields}
+                selectedField={selectedField}
+                setSelectedField={setSelectedField}
+                setFields={setFields}
+            />
 
-                <ul className="space-y-1">
-                    {Object.keys(fields).map((f) => (
-                        <li key={f}>
-                            <button
-                                onClick={() => setSelectedField(f)}
-                                className={`w-full text-left px-3 py-2 rounded ${f === selectedField
-                                        ? "bg-blue-100 font-bold"
-                                        : "hover:bg-gray-200"
-                                    }`}
-                            >
-                                {fields[f].column_name}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            </aside>
-
-            {/* MAIN PANEL */}
             <main className="flex-1 p-6 overflow-y-auto">
-                {/* HEADER */}
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold">
-                        Editing: {fieldData.column_name}
-                    </h2>
+                {/* TABS */}
+                <div className="border-b mb-4 flex gap-4">
+                    <button
+                        onClick={() => setActiveTab("Fields")}
+                        className={activeTab === "Fields" ? "font-bold border-b-2" : ""}
+                    >Field Settings</button>
 
                     <button
-                        className="text-red-600 hover:text-red-800"
-                        onClick={() => deleteField(selectedField)}
-                    >
-                        Delete Field
-                    </button>
+                        onClick={() => setActiveTab("Table")}
+                        className={activeTab === "Table" ? "font-bold border-b-2" : ""}
+                    >Table Settings</button>
                 </div>
 
-                {/* TABS */}
-                <div className="border-b mb-4">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab}
-                            className={`px-4 py-2 mr-2 ${activeTab === tab
-                                    ? "border-b-2 border-blue-600 font-semibold"
-                                    : "text-gray-500"
-                                }`}
-                            onClick={() => setActiveTab(tab)}
-                        >
-                            {tab}
-                        </button>
-                    ))}
-                </div>
+                {activeTab === "Fields" && selectedField !== null && (
+                    <FieldEditorTabs
+                        field={selectedField}
+                        fieldData={fields[selectedField]}
+                        updateField={updateField}
+                    />
+                )}
 
-                {/* TAB CONTENT */}
-                <div>
-                    {activeTab === "Basic" && (
-                        <BasicTab fieldData={fieldData} updateField={updateField} field={selectedField} />
-                    )}
+                {activeTab === "Table" && (
+                    <TableSettingsTab
+                        tableSettings={tableSettings}
+                        updateTable={updateTable}
+                    />
+                )}
 
-                    {activeTab === "Validation" && (
-                        <ValidationTab fieldData={fieldData} updateField={updateField} field={selectedField} />
-                    )}
-
-                    {activeTab === "UI" && (
-                        <UITab fieldData={fieldData} updateField={updateField} field={selectedField} />
-                    )}
-
-                    {activeTab === "Database" && (
-                        <DatabaseTab fieldData={fieldData} updateField={updateField} field={selectedField} />
-                    )}
-
-                    {activeTab === "Security" && (
-                        <SecurityTab fieldData={fieldData} updateField={updateField} field={selectedField} />
-                    )}
-
-                    {activeTab === "Advanced" && (
-                        <AdvancedTab fieldData={fieldData} updateField={updateField} field={selectedField} />
-                    )}
-                </div>
-
-                {/* SAVE BUTTON */}
                 <div className="mt-6 text-right">
                     <button
                         className="bg-green-600 text-white px-6 py-2 rounded"
@@ -179,7 +277,6 @@ export default function Metadata() {
     );
 }
 
-
 export function BasicTab({ field, fieldData, updateField }: any) {
     return (
         <div className="space-y-4">
@@ -187,7 +284,7 @@ export function BasicTab({ field, fieldData, updateField }: any) {
                 <label className="font-medium block">Column Name</label>
                 <input
                     className="border p-2 w-full rounded"
-                    value={fieldData.column_name}
+                    value={fieldData?.column_name}
                     onChange={(e) => updateField(field, "column_name", e.target.value)}
                 />
             </div>
@@ -196,15 +293,54 @@ export function BasicTab({ field, fieldData, updateField }: any) {
                 <label className="font-medium block">Data Type</label>
                 <select
                     className="border p-2 w-full rounded"
-                    value={fieldData.data_type}
+                    value={fieldData?.data_type}
                     onChange={(e) => updateField(field, "data_type", e.target.value)}
                 >
                     <option value="string">string</option>
+                    <option value="text">text</option>
+                    <option value="richtext">richtext</option>
+
                     <option value="number">number</option>
-                    <option value="email">email</option>
-                    <option value="password">password</option>
-                    <option value="enum">enum</option>
+                    <option value="int">int</option>
+                    <option value="float">float</option>
+                    <option value="decimal">decimal</option>
+                    <option value="bigint">bigint</option>
+
                     <option value="boolean">boolean</option>
+                    <option value="enum">enum</option>
+                    <option value="array">array</option>
+                    <option value="object">object</option>
+                    <option value="json">json</option>
+
+                    <option value="date">date</option>
+                    <option value="time">time</option>
+                    <option value="datetime">datetime</option>
+                    <option value="timestamp">timestamp</option>
+
+                    <option value="email">email</option>
+                    <option value="url">url</option>
+                    <option value="url_endpoint">url_endpoint</option>
+                    <option value="ip">ip</option>
+                    <option value="ipv4">ipv4</option>
+                    <option value="ipv6">ipv6</option>
+                    <option value="mac_address">mac_address</option>
+
+                    <option value="image">image</option>
+                    <option value="file">file</option>
+                    <option value="video">video</option>
+                    <option value="audio">audio</option>
+
+                    <option value="uuid">uuid</option>
+                    <option value="sku">sku</option>
+                    <option value="slug">slug</option>
+
+                    <option value="password">password</option>
+                    <option value="hash">hash</option>
+                    <option value="token">token</option>
+
+                    <option value="reference">reference</option>
+                    <option value="computed">computed</option>
+                    <option value="virtual">virtual</option>
                 </select>
             </div>
 
@@ -212,7 +348,7 @@ export function BasicTab({ field, fieldData, updateField }: any) {
                 <label className="flex items-center gap-2">
                     <input
                         type="checkbox"
-                        checked={fieldData.required || false}
+                        checked={fieldData?.required || false}
                         onChange={(e) => updateField(field, "required", e.target.checked)}
                     />
                     Required
@@ -221,7 +357,7 @@ export function BasicTab({ field, fieldData, updateField }: any) {
                 <label className="flex items-center gap-2">
                     <input
                         type="checkbox"
-                        checked={fieldData.disabled || false}
+                        checked={fieldData?.disabled || false}
                         onChange={(e) => updateField(field, "disabled", e.target.checked)}
                     />
                     Disabled
@@ -230,7 +366,7 @@ export function BasicTab({ field, fieldData, updateField }: any) {
                 <label className="flex items-center gap-2">
                     <input
                         type="checkbox"
-                        checked={fieldData.is_unique || false}
+                        checked={fieldData?.is_unique || false}
                         onChange={(e) => updateField(field, "is_unique", e.target.checked)}
                     />
                     Unique
@@ -290,32 +426,32 @@ export function ValidationTab({ field, fieldData, updateField }: any) {
             {(fieldData.data_type === "number" ||
                 fieldData.data_type === "float" ||
                 fieldData.data_type === "int") && (
-                <div className="flex gap-6">
-                    <div className="w-full">
-                        <label className="font-medium block">Minimum Value</label>
-                        <input
-                            type="number"
-                            className="border p-2 w-full rounded"
-                            value={fieldData.min_value || ""}
-                            onChange={(e) =>
-                                updateField(field, "min_value", e.target.value)
-                            }
-                        />
-                    </div>
+                    <div className="flex gap-6">
+                        <div className="w-full">
+                            <label className="font-medium block">Minimum Value</label>
+                            <input
+                                type="number"
+                                className="border p-2 w-full rounded"
+                                value={fieldData.min_value || ""}
+                                onChange={(e) =>
+                                    updateField(field, "min_value", e.target.value)
+                                }
+                            />
+                        </div>
 
-                    <div className="w-full">
-                        <label className="font-medium block">Maximum Value</label>
-                        <input
-                            type="number"
-                            className="border p-2 w-full rounded"
-                            value={fieldData.max_value || ""}
-                            onChange={(e) =>
-                                updateField(field, "max_value", e.target.value)
-                            }
-                        />
+                        <div className="w-full">
+                            <label className="font-medium block">Maximum Value</label>
+                            <input
+                                type="number"
+                                className="border p-2 w-full rounded"
+                                value={fieldData.max_value || ""}
+                                onChange={(e) =>
+                                    updateField(field, "max_value", e.target.value)
+                                }
+                            />
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
         </div>
     );
 }
@@ -419,22 +555,13 @@ export function DatabaseTab({ field, fieldData, updateField }: any) {
                 <label className="flex items-center gap-2">
                     <input
                         type="checkbox"
-                        checked={fieldData.nullable || false}
-                        onChange={(e) => updateField(field, "nullable", e.target.checked)}
-                    />
-                    Nullable
-                </label>
-
-                <label className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
                         checked={fieldData.index || false}
                         onChange={(e) => updateField(field, "index", e.target.checked)}
                     />
                     Indexed
                 </label>
 
-                <label className="flex items-center gap-2">
+                {/* <label className="flex items-center gap-2">
                     <input
                         type="checkbox"
                         checked={fieldData.primary_key || false}
@@ -443,7 +570,7 @@ export function DatabaseTab({ field, fieldData, updateField }: any) {
                         }
                     />
                     Primary Key
-                </label>
+                </label> */}
 
                 <label className="flex items-center gap-2">
                     <input
@@ -489,7 +616,7 @@ export function DatabaseTab({ field, fieldData, updateField }: any) {
             </div>
 
             <div className="grid grid-cols-2 gap-6">
-                <div>
+                {/* <div>
                     <label className="font-medium block">On Delete</label>
                     <select
                         className="border p-2 w-full rounded"
@@ -500,7 +627,7 @@ export function DatabaseTab({ field, fieldData, updateField }: any) {
                         <option value="cascade">cascade</option>
                         <option value="set_null">set null</option>
                     </select>
-                </div>
+                </div> */}
 
                 <div>
                     <label className="font-medium block">On Update</label>

@@ -39,13 +39,15 @@ export default function FirestoreExplorer() {
 
     const handleSelectDocument = (docData: any, col: any = {}) => {
         setIsDocument(true)
+        let navigatePath = path;
         if (isDocument) {
-            setPath(path.split('/').slice(0, -1).join('/') + '/' + docData._id)
+            navigatePath = path.split('/').slice(0, -1).join('/') + '/' + docData._id;
         }
         else {
-            setPath(path + '/' + docData._id)
+            navigatePath = path + '/' + docData._id;
         }
-        navigate(`${docData._id}`);
+        setPath(navigatePath)
+        navigate(`/database/${dbName}/${navigatePath}`);
     };
 
     console.log(windowPath.length, path.split('/').length, path.split('/').slice(-1))
@@ -94,11 +96,44 @@ export default function FirestoreExplorer() {
 
         // API URL: /databases/{dbname}/collections/{collection_name}
         const url = `${API_BASE_URL}${API_COLLECTIONS_PATH}${dbName}/collections/${colName}`;
+        
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `Creation failed: ${response.status}`);
+            }
+            
+            // Success: Reset input, hide form, show success message, and trigger fetch
+            setNewColName("");
+            setShowNewCollectionInput(false);
+            setColCreationStatus(`Collection '${colName}' created successfully.`);
+            
+            // Re-fetch the collection list (triggered by the dependency on isCreatingCol)
+            
+        } catch (error: any) {
+            console.error("Collection creation error:", error);
+            setColCreationStatus(`Error: ${error.message}`);
+        } finally {
+            setIsCreatingCol(false);
+            // Clear status after a short delay
+            setTimeout(() => setColCreationStatus(null), 5000);
+        }
+    };
+    
+    // --- NEW HANDLER: Create Collection API Call ---
+    const addSubCollection = async (name: any) => {
+        const url = `${API_BASE_URL}/database/sub-collections/${dbName}/${path}/${name}`;
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
             });
 
             if (!response.ok) {
@@ -109,7 +144,7 @@ export default function FirestoreExplorer() {
             // Success: Reset input, hide form, show success message, and trigger fetch
             setNewColName("");
             setShowNewCollectionInput(false);
-            setColCreationStatus(`Collection '${colName}' created successfully.`);
+            setColCreationStatus(`Collection '${name}' created successfully.`);
 
             // Re-fetch the collection list (triggered by the dependency on isCreatingCol)
 
@@ -230,11 +265,11 @@ export default function FirestoreExplorer() {
                         <DocumentView
                             path={path}
                             setCollection={(col: any) => {
-                                console.log(path)
                                 setIsDocument(false)
                                 setPath(path + '/' + col)
                                 navigate(col)
                             }}
+                            onAddSubCollection={(name: any) => addSubCollection(name)}
                         // Assume DocumentView uses the full selectedDocument prop to fetch data
                         />
                     ) : (

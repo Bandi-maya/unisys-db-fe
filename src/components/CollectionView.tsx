@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../constants';
 
 // --- API ENDPOINT CONFIGURATION ---
@@ -96,10 +96,13 @@ export default function CollectionView({
   // --- 2. Fetch Metadata Schema ---
   useEffect(() => {
     const fetchMetadata = async () => {
-      let url = `${API_BASE_URL}${API_METADATA_PATH}${dbName}/${path.split('/').map((key: any, index: any) => index % 2 === 1 ? ':_doc_id' : key).join('$')}`;
+      let metadatacollectionName = path.split('/').map((key: any, index: any) => index % 2 === 1 ? ':_doc_id' : key).join('$');
       if (isDocument) {
-        url = url.split('$').slice(0, -1).join('$')
+        // url = url.split('$').slice(0, -1).join('$')
+        metadatacollectionName = metadatacollectionName.split('$').slice(0, -1)
       }
+      let url = `${API_BASE_URL}${API_METADATA_PATH}${dbName}/${metadatacollectionName}`;
+      setMetadataCollectionName(metadatacollectionName);
       setLoadingMetadata(true);
       setMetadataError(null);
       // API URL: /metadata/{db_name}/{table_name}
@@ -126,7 +129,7 @@ export default function CollectionView({
     fetchMetadata();
   }, [path, isDocument]);
 
-  console.log(metadata, metadata_collection_name)
+  console.log(metadata, metadata_collection_name, !loadingMetadata, metadata, metadata?.[metadata_collection_name])
 
   // Update formData when a field changes in the structured form
   const handleFormChange = (key: any, value: any) => {
@@ -136,8 +139,8 @@ export default function CollectionView({
 
   // --- 3. Handle Add Document Click (Structured or Simple) ---
   const handleAddDocument = async () => {
-    const id = newDocId.trim();
-    if (!id) return;
+    // const id = newDocId.trim();
+    // if (!id) return;
 
     let dataToSend = {};
 
@@ -146,7 +149,7 @@ export default function CollectionView({
       // Use structured form data
       dataToSend = formData;
       // Basic required field check (can be expanded)
-      const requiredFields: any = Object.values(metadata[metadata_collection_name]).filter((f: any) => f.required);
+      const requiredFields: any = Object.values(metadata[metadata_collection_name]?.fields).filter((f: any) => f.required);
       for (const field of requiredFields) {
         if (!formData[field.column_name]) {
           alert(`Required field missing: ${field.display_name}`);
@@ -162,7 +165,10 @@ export default function CollectionView({
     setIsSaving(true);
 
     // 2. Construct URL and send request
-    const url = `${API_BASE_URL}${API_DOCS_PATH}${dbName}/${collectionName}/${id}`;
+    let url = `${API_BASE_URL}${API_DOCS_PATH}${dbName}/${path}`;
+    if (isDocument) {
+      url = url.split('/').slice(0, -1).join('/');
+    }
 
     try {
       const response = await fetch(url, {
@@ -241,20 +247,20 @@ export default function CollectionView({
           </div>
         )}
 
-        <input
+        {/* <input
           className="border p-2 rounded w-full mb-2 dark:bg-gray-700 dark:border-gray-600"
           placeholder="Document ID (e.g., user_123)"
           value={newDocId}
           onChange={(e) => setNewDocId(e.target.value)}
           disabled={isSaving}
-        />
+        /> */}
 
         {/* Conditional Rendering: Structured Form vs Simple Button */}
         {!loadingMetadata && metadata && metadata[metadata_collection_name] ? (
           // --- STRUCTURED FORM (Metadata Found) ---
           <div className="mt-4 p-3 border rounded dark:border-gray-700">
             <p className="font-semibold mb-3 text-sm">Schema Found: Fill Fields</p>
-            {Object.values(metadata[metadata_collection_name])
+            {Object.values(metadata[metadata_collection_name]?.['fields'])
               .filter((f: any) => f.column_name !== 'id' && f.column_name !== '_id') // Exclude ID fields from internal form
               .map((field: any) => (
                 <SchemaFormField
@@ -277,7 +283,9 @@ export default function CollectionView({
             : "bg-gray-300 text-gray-600 cursor-not-allowed dark:bg-gray-600 dark:text-gray-400"
             }`}
           onClick={handleAddDocument}
-          disabled={!newDocId.trim() || isSaving}
+          disabled={
+            // !newDocId.trim() ||
+            isSaving}
         >
           {isSaving ? 'Saving Document...' : '+ Create Document'}
         </button>
