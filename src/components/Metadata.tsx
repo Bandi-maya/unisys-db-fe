@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_BASE_URL } from "../constants";
 
 function FieldEditorTabs({ field, fieldData, updateField }: any) {
@@ -40,7 +40,217 @@ function FieldEditorTabs({ field, fieldData, updateField }: any) {
     );
 }
 
-function TableSettingsTab({ tableSettings, updateTable }: any) {
+function MultiSelect({ options, selected, onChange, placeholder = "Select..." }: any) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (ref.current && !ref.current.contains(event.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const toggleOption = (value: string) => {
+        if (selected.includes(value)) {
+            onChange(selected.filter((v: any) => v !== value));
+        } else {
+            onChange([...selected, value]);
+        }
+    };
+
+    return (
+        <div ref={ref} className="relative w-full">
+            <div
+                className="border p-2 w-full rounded cursor-pointer"
+                onClick={() => setOpen(!open)}
+            >
+                {selected.length > 0 ? selected.join(", ") : placeholder}
+            </div>
+
+            {open && (
+                <div className="absolute mt-1 w-full border rounded bg-white max-h-60 overflow-auto z-10">
+                    {options.map((opt: any) => (
+                        <div
+                            key={opt}
+                            className={`p-2 cursor-pointer hover:bg-blue-100 ${selected.includes(opt) ? "bg-blue-200 font-semibold" : ""
+                                }`}
+                            onClick={() => toggleOption(opt)}
+                        >
+                            {opt}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+interface ForeignKey {
+    column: string;
+    references_table: string;
+    references_column: string;
+}
+
+interface ForeignKeyEditorProps {
+    value: ForeignKey[];
+    tables: string[];
+    collectionName: string;
+    onChange: (value: ForeignKey[]) => void;
+}
+
+function ForeignKeyEditor({ value, onChange, tables, collectionName }: ForeignKeyEditorProps) {
+    const dbName = window.location.pathname.split("/")[3];
+    const [dbCollections, setDbCollections] = useState<string[]>([]);
+    const [loadingCollections, setLoadingCollections] = useState(false);
+    const [collectionError, setCollectionError] = useState<string | null>(null);
+    const [metadata, setMetadata] = useState<any>(null);
+    const [loadingMetadata, setLoadingMetadata] = useState(true);
+    const [metadataError, setMetadataError] = useState<string | null>(null);
+
+    const fetchMetadata = async (collection: string) => {
+        let metadatacollectionName = collection.split('.').join('$');
+        let url = `${API_BASE_URL}/metadata/${dbName}/${metadatacollectionName}`;
+        // setMetadataCollectionName(metadatacollectionName);
+        setLoadingMetadata(true);
+        setMetadataError(null);
+        // API URL: /metadata/{db_name}/{table_name}
+
+        try {
+            const response = await fetch(url);
+            if (response.status === 404) {
+                setMetadata(null); // No explicit schema found
+            } else if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `Metadata fetch failed: ${response.status}`);
+            } else {
+                const result = await response.json();
+                // Assuming result.data holds the field definitions array: {fields: [...]}
+                setMetadata(result.data || null);
+            }
+        } catch (err: any) {
+            setMetadataError(err.message || "Failed to load schema metadata.");
+        } finally {
+            setLoadingMetadata(false);
+        }
+    };
+
+    const fetchCollections = async () => {
+        setLoadingCollections(true);
+        setCollectionError(null);
+
+        const url = `${API_BASE_URL}/databases/${dbName}/collections`;
+
+        try {
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `HTTP error: ${response.status}`);
+            }
+
+            const data: string[] = await response.json();
+            setDbCollections(data);
+        } catch (err: any) {
+            console.error("Collection fetch error:", err);
+            setCollectionError(err.message || "Failed to load collections.");
+        } finally {
+            setLoadingCollections(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCollections();
+    }, [dbName]);
+
+    const [keys, setKeys] = useState<ForeignKey[]>(value || []);
+
+    const updateKey = (index: number, field: keyof ForeignKey, val: string) => {
+        const updated = [...keys];
+        updated[index][field] = val;
+        setKeys(updated);
+        onChange(updated);
+    };
+
+    const addKey = () => {
+        const updated = [...keys, { column: "", references_table: "", references_column: "" }];
+        setKeys(updated);
+        onChange(updated);
+    };
+
+    const removeKey = (index: number) => {
+        const updated = keys.filter((_, i) => i !== index);
+        setKeys(updated);
+        onChange(updated);
+    };
+
+    return (
+        <div className="border p-4 rounded space-y-3">
+            <label className="font-medium block mb-2">Foreign Keys</label>
+            {keys.map((fk, index) => (
+                <div key={index} className="flex gap-2 items-center">
+                    <select
+                        value={fk.column}
+                        onChange={(e) => updateKey(index, "column", e.target.value)}
+                        className="border p-2 rounded w-1/3"
+                    >
+                        {tables.map((table) => (
+                            <option key={table} value={table}>
+                                {table}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        value={fk.references_table}
+                        onChange={(e) => {
+                            updateKey(index, "references_table", e.target.value)
+                            fetchMetadata(e.target.value);
+                        }}
+                        className="border p-2 rounded w-1/3"
+                    >
+                        {dbCollections.map((table) => (
+                            !['metadata_schemas', 'fe_metadata', collectionName].includes(table) && <option key={table} value={table}>
+                                {table}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        value={fk.references_column}
+                        onChange={(e) => updateKey(index, "references_column", e.target.value)}
+                        className="border p-2 rounded w-1/3"
+                    >
+                        {metadata && metadata[fk.references_table] && Object.keys(metadata[fk.references_table].fields).map((col: string) => (
+                            <option key={col} value={col}>
+                                {col}
+                            </option>
+                        ))}
+                    </select>
+
+                    <button
+                        type="button"
+                        className="text-red-500 font-bold px-2 py-1"
+                        onClick={() => removeKey(index)}
+                    >
+                        ✕
+                    </button>
+                </div>
+            ))}
+            <button
+                type="button"
+                className="mt-2 bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                onClick={addKey}
+            >
+                + Add Foreign Key
+            </button>
+        </div>
+    );
+}
+
+function TableSettingsTab({ tableSettings, updateTable, fields, collectionName }: any) {
     return (
         <div className="space-y-4">
 
@@ -73,23 +283,20 @@ function TableSettingsTab({ tableSettings, updateTable }: any) {
 
             <div>
                 <label className="font-medium block">Indexes (comma separated)</label>
-                <input
-                    className="border p-2 w-full rounded"
-                    value={tableSettings.indexes?.join(",") || ""}
-                    onChange={(e) => updateTable("indexes", e.target.value.split(","))}
+                <MultiSelect
+                    options={Object.keys(fields)}
+                    selected={tableSettings.indexes || []}
+                    onChange={(newSelected: any) => updateTable("indexes", newSelected)}
+                    placeholder="Select indexes"
                 />
             </div>
 
-            <div>
-                <label className="font-medium block">Foreign Keys (JSON)</label>
-                <textarea
-                    className="border p-2 w-full rounded"
-                    value={JSON.stringify(tableSettings.foreign_keys || [], null, 2)}
-                    onChange={(e) =>
-                        updateTable("foreign_keys", JSON.parse(e.target.value || "[]"))
-                    }
-                />
-            </div>
+            <ForeignKeyEditor
+                value={tableSettings.foreign_keys || []}
+                collectionName={collectionName}
+                tables={Object.keys(fields)}
+                onChange={(newKeys) => updateTable("foreign_keys", newKeys)}
+            />
         </div>
     );
 }
@@ -259,6 +466,8 @@ export default function Metadata() {
 
                 {activeTab === "Table" && (
                     <TableSettingsTab
+                        collectionName={validKey}
+                        fields={fields}
                         tableSettings={tableSettings}
                         updateTable={updateTable}
                     />

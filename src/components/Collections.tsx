@@ -1,6 +1,6 @@
 export default function CollectionListItem({ name, onSelect, isSelected }: any) {
 
-    return <div
+    return !['metadata_schemas', 'fe_metadata'].includes(name) && <div
         onClick={() => {
             onSelect();
         }}
